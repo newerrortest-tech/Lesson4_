@@ -91,8 +91,10 @@ function showPrice(km) {
 if (window.ymaps) {
   ymaps.ready(() => {
     const map = new ymaps.Map('map', { center: [55.751574, 37.573856], zoom: 5, controls: ['zoomControl'] });
-    new ymaps.SuggestView('from');
-    new ymaps.SuggestView('to');
+    if (typeof ymaps.SuggestView === 'function') {
+      new ymaps.SuggestView('from');
+      new ymaps.SuggestView('to');
+    }
 
     calc.addEventListener('click', () => {
       resetCalculation();
@@ -116,7 +118,7 @@ if (window.ymaps) {
   });
 } else {
   calc.addEventListener('click', () => {
-    alert('Для расчёта маршрута вставьте свой ключ Яндекс.Карт в order.html вместо YOUR_YANDEX_API_KEY.');
+    alert('Не удалось загрузить Яндекс Карты. Проверьте доступность сервиса и настройки API-ключа.');
   });
 }
 
@@ -126,7 +128,8 @@ submit.addEventListener('click', () => {
   $('orderId').textContent = id;
   $('orderForm').style.display = 'none';
   $('orderSuccess').classList.add('is-visible');
-  const orders = JSON.parse(localStorage.getItem('dostaffkinOrders') || '{}');
+  let orders = {};
+  try { orders = JSON.parse(localStorage.getItem('dostaffkinOrders') || '{}'); } catch (_) {}
   orders[id] = {
     from: fromInput.value,
     to: toInput.value,
