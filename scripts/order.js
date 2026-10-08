@@ -1,149 +1,192 @@
-/* Dostaffkin — оформление доставки */
-const rates = { xs: 9, s: 13, m: 20, l: 27, xl: 35, max: 70 };
-const minimums = { xs: 149, s: 199, m: 249, l: 349, xl: 499, max: 999 };
-let selectedSize = 'xs';
-let selectedRate = rates.xs;
-let selectedSpeed = 'regular';
-let route = null;
-let routeKm = 0;
-let calculation = null;
+// Переменные, нужные для работы функционала
 
-const $ = (id) => document.getElementById(id);
-const fromInput = $('from');
-const toInput = $('to');
-const calc = $('calc');
-const submit = $('submit');
+// элементы формы расчета
+const fromInput = document.getElementById('from');
+const toInput = document.getElementById('to');
+const calcButton = document.getElementById('calc');
+const submitButton = document.getElementById('submit');
 
-// Сбрасываем старый расчёт при изменении параметров заказа.
-function resetCalculation() {
-  routeKm = 0;
-  calculation = null;
-  ['distanceValue', 'durationValue', 'rateValue', 'totalValue'].forEach((id) => {
-    $(id).textContent = '—';
-  });
-  validateOrder();
-}
+// элементы в расчетах
+const distanceValue = document.getElementById('distanceValue');
+const durationValue = document.getElementById('durationValue');
+const rateValue = document.getElementById('rateValue');
+const totalValue = document.getElementById('totalValue');
 
-// Размер посылки
-document.querySelectorAll('.main-size-card').forEach((card) => {
-  card.addEventListener('click', () => {
-    document.querySelectorAll('.main-size-card').forEach((c) => c.classList.remove('is-active'));
-    card.classList.add('is-active');
-    selectedSize = card.dataset.value;
-    selectedRate = Number(card.dataset.rate || rates[selectedSize]);
-    resetCalculation();
-  });
+// элементы формы заявки
+const orderForm = document.getElementById('orderForm');
+const nameInput = document.getElementById('customerName');
+const phoneInput = document.getElementById('customerPhone');
+const commentInput = document.getElementById('comment');
+const orderSuccessBlock = document.getElementById('orderSuccess');
+const orderIdValue = document.getElementById('orderId');
+
+// Элементы карточек размеров
+const sizes = document.querySelectorAll('.main-size-card');
+// Элементы карточек скоростей
+const speeds = document.querySelectorAll('.main-speed-card');
+
+// Переменные для карты, маршрута и расчетов
+let map;
+let mapRoute;
+let calculation;
+
+// Ставка за км для расчета стоимости в зависимости от размера посылки
+const RATES = { xs: 9, s: 13, m: 20, l: 27, xl: 35, max: 70 };
+// Минимальные тарифы стоимости в зависимости от размера посылки
+const MIN_BY_SIZE = { xs: 149, s: 199, m: 249, l: 349, xl: 499, max: 999 };
+
+// Запускаем стартовый функционал работы карт
+ymaps.ready(() => {
+    // Создаем карту с центром в Москве.
+    map = new ymaps.Map('map', {
+        center: [55.751244, 37.618423],
+        zoom: 5,
+        controls: ['zoomControl']
+    });
+
+    // Подключаем подсказки адресов к полям от яндекса
+    new ymaps.SuggestView('from');
+    new ymaps.SuggestView('to');
+
+    // Логика выбора размера посылки и скорости доставки
+    [sizes, speeds].forEach(group => {
+        group.forEach(element => {
+            element.addEventListener('click', () => {
+                group.forEach((c) => c.classList.toggle('is-active', c.dataset.value === element.dataset.value));
+                renderInfo();
+            })
+        });
+    });
+
+    // Дизейблим кнопку Рассчитать если одного или двух значений нет
+    [fromInput, toInput].forEach((input) => {
+        input.addEventListener('change', () => {
+            calcButton.disabled = !(fromInput.value && toInput.value);
+            renderInfo();
+        });
+    });
+
 });
 
-// Скорость доставки
-document.querySelectorAll('.main-speed-card').forEach((card) => {
-  card.addEventListener('click', () => {
-    document.querySelectorAll('.main-speed-card').forEach((c) => c.classList.remove('is-active'));
-    card.classList.add('is-active');
-    selectedSpeed = card.dataset.value;
-    resetCalculation();
-  });
-});
 
-function validateRoute() {
-  calc.disabled = !(fromInput.value.trim() && toInput.value.trim());
-}
-fromInput.addEventListener('input', () => { validateRoute(); resetCalculation(); });
-toInput.addEventListener('input', () => { validateRoute(); resetCalculation(); });
-
-function validateOrder() {
-  submit.disabled = !($('customerName').value.trim() && $('customerPhone').value.trim() && calculation !== null);
-}
-$('customerName').addEventListener('input', validateOrder);
-$('customerPhone').addEventListener('input', validateOrder);
-
-function showPrice(km) {
-  const baseDuration = Math.min(30, 1 + Math.ceil(km / 80));
-  let duration = baseDuration;
-  let total = Math.max(minimums[selectedSize], Math.ceil(km * selectedRate));
-
-  // По инструкции урока: приоритетная доставка +15% к цене и -30% к сроку.
-  if (selectedSpeed === 'fast') {
-    total = Math.ceil(total * 1.15);
-    duration = Math.ceil(duration * 0.70);
-  }
-
-  routeKm = km;
-  calculation = {
-    from: fromInput.value.trim(),
-    to: toInput.value.trim(),
-    size: selectedSize,
-    speed: selectedSpeed,
-    distance: Number(km.toFixed(1)),
-    duration,
-    rate: selectedRate,
-    total
-  };
-
-  $('distanceValue').textContent = `${calculation.distance} км`;
-  $('durationValue').textContent = `${duration} дн.`;
-  $('rateValue').textContent = `${selectedRate} ₽/км`;
-  $('totalValue').textContent = `${total.toLocaleString('ru-RU')} ₽`;
-  validateOrder();
-}
-
-// Карта и расчёт маршрута. Остальной интерфейс работает даже если API недоступен.
-if (window.ymaps) {
-  ymaps.ready(() => {
-    const map = new ymaps.Map('map', { center: [55.751574, 37.573856], zoom: 5, controls: ['zoomControl'] });
-    if (typeof ymaps.SuggestView === 'function') {
-      new ymaps.SuggestView('from');
-      new ymaps.SuggestView('to');
+// Основной расчет: строим маршрут и считаем стоимость.
+calcButton.addEventListener('click', () => {
+    // Удаляем старый маршрут с карты.
+    if (mapRoute) {
+        map.geoObjects.remove(mapRoute);
+        mapRoute = null;
     }
 
-    calc.addEventListener('click', () => {
-      resetCalculation();
-      if (route) map.geoObjects.remove(route);
-      route = new ymaps.multiRouter.MultiRoute(
-        { referencePoints: [fromInput.value.trim(), toInput.value.trim()], params: { routingMode: 'auto' } },
-        { boundsAutoApply: true }
-      );
-      map.geoObjects.add(route);
-      route.model.events.add('requestsuccess', () => {
-        const active = route.getActiveRoute();
-        if (!active) { alert('Не удалось построить маршрут.'); return; }
-        const meters = active.properties.get('distance').value;
-        showPrice(meters / 1000);
-      });
-      route.model.events.add('requestfail', () => {
-        resetCalculation();
-        alert('Не удалось построить маршрут. Проверьте адреса или доступность Яндекс Карт.');
-      });
+    // Создаем новый маршрут по введенным точкам.
+    mapRoute = new ymaps.multiRouter.MultiRoute({ referencePoints: [fromInput.value, toInput.value] }, { boundsAutoApply: false });
+
+    // Добавляем новый маршрут на карту.
+    map.geoObjects.add(mapRoute);
+
+    // Успешно получили маршрут — берём дистанцию и время.
+    mapRoute.model.events.add('requestsuccess', () => {
+        try {
+            // Берем активный маршрут (основной).
+            const activeRoute = mapRoute.getActiveRoute();
+            if (!activeRoute) {
+                return failedCalculation();
+            }
+
+            // Извлекаем расстояние и длительность.
+            const km = activeRoute.properties.get('distance').value / 1000;
+            // Считаем цену: тариф * км, округляем вверх.
+            const size = document.querySelector('.main-size-card.is-active').dataset.value;
+            // Применяем минимальный порог.
+            let total = Math.max(MIN_BY_SIZE[size], Math.ceil(km * RATES[size]));
+            // Просчитываем длительность доставки
+            let duration = Math.min(30, 1 + Math.ceil(km / 80));
+            // Увеличиваем на 15% и сокращаем время на 30%
+            const speed = document.querySelector('.main-speed-card.is-active').dataset.value;
+            if (speed === 'fast') {
+                total = Math.ceil(total * 1.15);
+                duration = Math.ceil(duration - (duration * 0.30));
+            }
+
+            calculation = {
+                from: fromInput.value,
+                to: toInput.value,
+                size: size,
+                distance: km.toFixed(1),
+                duration: duration,
+                rate: RATES[size],
+                total: total,
+                speed: speed
+            };
+
+            // Выводим результат на экран.
+            renderInfo({
+                distanceText: `${calculation.distance} км`,
+                durationText: `${calculation.duration} дн.`,
+                rateText: `${calculation.rate} ₽/км`,
+                totalText: calculation.total
+            });
+
+            submitButton.disabled = false;
+        } catch (err) {
+            failedCalculation();
+        }
     });
-  });
-} else {
-  calc.addEventListener('click', () => {
-    alert('Не удалось загрузить Яндекс Карты. Проверьте доступность сервиса и настройки API-ключа.');
-  });
+
+    // Ошибка запроса маршрута.
+    mapRoute.model.events.add('requestfail', failedCalculation);
+
+});
+
+// Dывод значений просчета в форму
+function renderInfo(info = null) {
+    // Заполняем значения в UI (или сбрасываем на "—").
+    distanceValue.textContent = info ? info['distanceText'] : '—';
+    durationValue.textContent = info ? info['durationText'] : '—';
+    rateValue.textContent = info ? info['rateText'] : '—';
+    totalValue.textContent = info ? info['totalText'] : '—';
 }
 
-submit.addEventListener('click', () => {
-  if (!calculation) return;
-  const id = 'DS' + Date.now().toString().slice(-8);
-  $('orderId').textContent = id;
-  $('orderForm').style.display = 'none';
-  $('orderSuccess').classList.add('is-visible');
-  let orders = {};
-  try { orders = JSON.parse(localStorage.getItem('dostaffkinOrders') || '{}'); } catch (_) {}
-  orders[id] = {
-    from: fromInput.value,
-    to: toInput.value,
-    size: selectedSize,
-    speed: selectedSpeed,
-    rate: selectedRate,
-    distance: calculation.distance,
-    duration: calculation.duration,
-    total: calculation.total,
-    name: $('customerName').value,
-    phone: $('customerPhone').value,
-    comment: $('comment').value,
-    status: 'Создан',
-    date: new Date().toLocaleDateString('ru-RU')
-  };
-  localStorage.setItem('dostaffkinOrders', JSON.stringify(orders));
+// Dывод ошибки и сброс подсчетов в случае возникновения ошибки
+function failedCalculation() {
+    calculation = null;
+    renderInfo();
+    alert('Не удалось построить маршрут. Проверьте адреса и выбранные параметры.');
+    submitButton.disabled = true;
+}
+
+// Отправка заявки (демо без реального бэкенда).
+submitButton.addEventListener('click', async () => {
+    // Без расчета заявку отправлять нельзя.
+    if (!calculation) {
+        alert('Сначала рассчитайте стоимость, чтобы оформить заявку.');
+        return;
+    }
+
+    // Считываем данные клиента.
+    const name = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+    const comment = commentInput.value.trim();
+
+    // Простая валидация.
+    if (!name) {
+        alert('Введите имя');
+        return;
+    }
+    if (!phone) {
+        alert('Введите корректный телефон (минимум 10 цифр)');
+        return;
+    }
+
+    // Формируем демо-payload и имитируем отправку.
+    const payload = {
+        id: Math.floor(Math.random() * (100000 - 10000 + 1)) + 10000,
+        customer: { name, phone, comment },
+        createdAt: new Date().toISOString()
+    };
+    console.log('Заказ: ' + payload.id, payload);
+    orderId.textContent = payload.id;
+
+    // Переключаем UI на экран успеха.
+    orderForm.style.display = 'none';
+    orderSuccess.classList.add('is-visible');
 });
